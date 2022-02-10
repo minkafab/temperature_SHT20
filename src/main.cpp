@@ -28,7 +28,7 @@ int thermoCLK = 5;
 const char usertopic[20] = "/9nuN1njcjg";
 const char sensorusertopic[20] = "/9nuN1njcjg/sensor/";
 char mqtt_server[20] = "m2mlight.com";
-const char sens_apikey[15] = "nuKR1njcsd";
+const char sens_apikey[15] = "gRpj1njcse";
 long lastReconnectAttempt = 0;
 
 MAX6675 KTh(thermoCLK, thermoCS, thermoDO);
