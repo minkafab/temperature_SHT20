@@ -14,6 +14,7 @@
 
 #define TRIGGER_PIN 4 // Trigger switch should be LOW active.
 #define HOLD_TIMER 3000
+#define SAMPLES 12
 
 WebServer Server;
 AutoConnect portal(Server);
@@ -30,6 +31,8 @@ const char sensorusertopic[20] = "/9nuN1njcjg/sensor/";
 char mqtt_server[20] = "m2mlight.com";
 const char sens_apikey[15] = "nuKR1njcsd";
 long lastReconnectAttempt = 0;
+float sum = 0;
+int count_samples = 0;
 
 MAX6675 KTh(thermoCLK, thermoCS, thermoDO);
 struct t
@@ -38,12 +41,12 @@ struct t
   uint32_t tTimeout;
 };
 // Tasks and their Schedules.
-t t_verify = {0, 60 * 1000}; // Run every x miliseconds
+t t_sampling = {0,  5 * 1000}; // Run every x miliseconds
 
 boolean reconnect()
 {
   Serial.print(F("Attempting MQTT connection..."));
-  if (client.connect("termocupla1", "mqtt", "m2mlight12"))
+  if (client.connect("termocupla2", "mqtt", "m2mlight12"))
   {
     Serial.println(F("connected"));
     client.subscribe(usertopic);
@@ -130,30 +133,38 @@ void loop()
     if (millis() - tm > HOLD_TIMER)
       deleteAllCredentials();
   }
-  if (tCheck(&t_verify))
+  if (tCheck(&t_sampling))
   {
     float temp = KTh.readCelsius();
-    Serial.print("C = ");
-    Serial.println(temp);
-    if (WiFi.status() == WL_CONNECTED)
+    sum += temp;
+    count_samples++;
+    Serial.printf("temp: %.1f sum: %.2f - count: %d \n",temp, sum, count_samples);
+    if(count_samples>=SAMPLES)
     {
-      char mess[20];
-      mess[0] = '\0';
-      char number[10];
-      dtostrf((double)temp, 4, 2, number);
-      strcat(mess, sens_apikey);
-      strcat(mess, "&");
-      strcat(mess, number);
-      mess[16] = '\0';
-      Serial.println(mess);
-      client.publish(sensorusertopic, mess);
+      sum = sum / count_samples;
+      Serial.print("C = ");
+      Serial.println(sum);
+      if (WiFi.status() == WL_CONNECTED)
+      {
+        char mess[20];
+        mess[0] = '\0';
+        char number[10];
+        dtostrf((double)sum, 4, 2, number);
+        strcat(mess, sens_apikey);
+        strcat(mess, "&");
+        strcat(mess, number);
+        mess[16] = '\0';
+        Serial.println(mess);
+        client.publish(sensorusertopic, mess);
+      }
+      else
+      {
+      }
+      count_samples = 0;
+      sum = 0;
     }
-    else
-    {
-    }
-    tRun(&t_verify);
+    tRun(&t_sampling);
   }
-
   if (!client.connected())
   {
     long now = millis();
