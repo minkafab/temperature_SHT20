@@ -46,7 +46,7 @@ t t_sampling = {0,  5 * 1000}; // Run every x miliseconds
 boolean reconnect()
 {
   Serial.print(F("Attempting MQTT connection..."));
-  if (client.connect("termocupla2", "mqtt", "m2mlight12"))
+  if (client.connect("termocupla", "mqtt", "m2mlight12"))
   {
     Serial.println(F("connected"));
     client.subscribe(usertopic);
