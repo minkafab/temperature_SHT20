@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <max6675.h>
+#include <uFire_SHT20.h>
 #if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -26,27 +26,28 @@ int thermoDO = 19;
 int thermoCS = 23;
 int thermoCLK = 5;
 
-const char usertopic[20] = "/9nuN1njcjg";
-const char sensorusertopic[20] = "/9nuN1njcjg/sensor/";
+const char usertopic[20] = "/eyOn1njcjb";
+const char sensorusertopic[20] = "/eyOn1njcjb/sensor/";
 char mqtt_server[20] = "m2mlight.com";
-const char sens_apikey[15] = "gRpj1njcse";
+const char sens_apikey[15] = "iIS61njcsp";
 long lastReconnectAttempt = 0;
 float sum = 0;
 int count_samples = 0;
 
-MAX6675 KTh(thermoCLK, thermoCS, thermoDO);
+uFire_SHT20 sht20;
+
 struct t
 {
   uint32_t tStart;
   uint32_t tTimeout;
 };
 // Tasks and their Schedules.
-t t_sampling = {0,  5 * 1000}; // Run every x miliseconds
+t t_sampling = {0, 5 * 1000}; // Run every x miliseconds
 
 boolean reconnect()
 {
   Serial.print(F("Attempting MQTT connection..."));
-  if (client.connect("termocupla", "mqtt", "m2mlight12"))
+  if (client.connect("SHT20-WIFI-EPICO", "mqtt", "m2mlight12"))
   {
     Serial.println(F("connected"));
     client.subscribe(usertopic);
@@ -98,7 +99,9 @@ void deleteAllCredentials()
 void setup()
 {
   Serial.begin(115200);
-  Serial.println("ESP32-Thermocouple");
+  Wire.begin();
+  sht20.begin();
+  Serial.println("ESP32-SHT20");
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   delay(500);
 
@@ -135,34 +138,50 @@ void loop()
   }
   if (tCheck(&t_sampling))
   {
-    float temp = KTh.readCelsius();
-    sum += temp;
-    count_samples++;
-    Serial.printf("temp: %.1f sum: %.2f - count: %d \n",temp, sum, count_samples);
-    if(count_samples>=SAMPLES)
+    sht20.measure_all();
+    float temp = sht20.tempC;
+    if (!sht20.connected() || temp > 128.0)
     {
-      sum = sum / count_samples;
-      Serial.print("C = ");
-      Serial.println(sum);
+      // sensor desconectado
       if (WiFi.status() == WL_CONNECTED)
       {
-        char mess[20];
-        mess[0] = '\0';
-        char number[10];
-        dtostrf((double)sum, 4, 2, number);
-        strcat(mess, sens_apikey);
-        strcat(mess, "&");
-        strcat(mess, number);
-        mess[16] = '\0';
-        Serial.println(mess);
-        client.publish(sensorusertopic, mess);
-      }
-      else
-      {
+        client.publish(sensorusertopic, "sensor desconectado");
+        sht20.begin();
       }
       count_samples = 0;
       sum = 0;
     }
+    else
+    {
+      if (count_samples >= SAMPLES)
+      {
+        sum = sum / count_samples;
+        Serial.print("C = ");
+        Serial.println(sum);
+        if (WiFi.status() == WL_CONNECTED)
+        {
+          char mess[20];
+          mess[0] = '\0';
+          char number[10];
+          dtostrf((double)sum, 4, 2, number);
+          strcat(mess, sens_apikey);
+          strcat(mess, "&");
+          strcat(mess, number);
+          mess[16] = '\0';
+          Serial.println(mess);
+          client.publish(sensorusertopic, mess);
+        }
+        else
+        {
+        }
+        count_samples = 0;
+        sum = 0;
+      }
+    }
+    sum += temp;
+    count_samples++;
+    Serial.printf("temp: %.1f sum: %.1f - count: %d \n", temp, sum, count_samples);
+
     tRun(&t_sampling);
   }
   if (!client.connected())
